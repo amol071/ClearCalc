@@ -10,9 +10,9 @@ import Expression
 
 struct ContentView: View {
     @State private var display = "0"
-    @State private var currentInput: String = ""
+    @State private var currentInput = ""
     @State private var expressionShown = ""
-    @State private var showMenu: Bool = false
+    @State private var showMenu = false
     @State private var dragOffset: CGFloat = 0.0
     @State private var justEvaluated = false
     @State private var history: [String] = []
@@ -35,7 +35,6 @@ struct ContentView: View {
                     VStack(spacing: 12) {
                         Spacer()
 
-                        // History button
                         HStack {
                             Button(action: {
                                 showHistorySheet = true
@@ -48,7 +47,6 @@ struct ContentView: View {
                             Spacer()
                         }
 
-                        // Display
                         VStack(alignment: .trailing, spacing: 4) {
                             HStack {
                                 Spacer()
@@ -79,7 +77,6 @@ struct ContentView: View {
                         }
                         .padding(.horizontal)
 
-                        // Buttons
                         ForEach(buttons, id: \.self) { row in
                             HStack(spacing: 12) {
                                 ForEach(row, id: \.self) { label in
@@ -101,28 +98,23 @@ struct ContentView: View {
                     .navigationBarTitle("ClearCalc", displayMode: .inline)
                     .navigationBarItems(leading:
                         Button(action: {
-                            withAnimation {
-                                showMenu = true
-                            }
+                            withAnimation { showMenu = true }
                         }) {
-                            Image(systemName: "line.horizontal.3")
-                                .imageScale(.large)
+                            Image(systemName: "line.horizontal.3").imageScale(.large)
                         }
                     )
                 }
             }
 
-            // Side Menu Slide-in with Drag
+            // Side menu
             ZStack {
                 if showMenu {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation {
-                                showMenu = false
-                                dragOffset = 0
-                            }
+                    Color.black.opacity(0.3).ignoresSafeArea().onTapGesture {
+                        withAnimation {
+                            showMenu = false
+                            dragOffset = 0
                         }
+                    }
                 }
 
                 HStack {
@@ -137,15 +129,11 @@ struct ContentView: View {
                                     }
                                 }
                                 .onEnded { value in
-                                    if value.translation.width < -100 {
-                                        withAnimation {
+                                    withAnimation {
+                                        if value.translation.width < -100 {
                                             showMenu = false
-                                            dragOffset = 0
                                         }
-                                    } else {
-                                        withAnimation {
-                                            dragOffset = 0
-                                        }
+                                        dragOffset = 0
                                     }
                                 }
                         )
@@ -156,16 +144,24 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showHistorySheet) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Calculation History")
-                    .font(.title2)
-                    .padding()
+                HStack {
+                    Text("Calculation History")
+                        .font(.title2)
+                        .padding(.leading)
+                    Spacer()
+                    Button("Close") {
+                        showHistorySheet = false
+                    }
+                    .padding(.trailing)
+                }
+                .padding(.top)
 
                 ScrollView {
-                    ForEach(history, id: \.self) { item in
-                        Text(item)
+                    ForEach(history.indices, id: \.self) { index in
+                        Text("\(index + 1). \(history[index])")
                             .padding(.horizontal)
                             .foregroundColor(.primary)
-                            .font(.system(size: 18))
+                            .font(.system(size: 20))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
@@ -174,17 +170,17 @@ struct ContentView: View {
             }
         }
         .gesture(
-            DragGesture()
-                .onEnded { value in
-                    if value.translation.width > 100 {
-                        withAnimation {
-                            showMenu = true
-                        }
+            DragGesture().onEnded { value in
+                if value.translation.width > 100 {
+                    withAnimation {
+                        showMenu = true
                     }
                 }
+            }
         )
     }
 
+    // MARK: - Logic
     func handleTap(_ label: String) {
         switch label {
         case "C":
@@ -192,6 +188,7 @@ struct ContentView: View {
             currentInput = ""
             expressionShown = ""
             history.removeAll()
+
         case "=":
             let expression = currentInput
                 .replacingOccurrences(of: "×", with: "*")
@@ -201,20 +198,32 @@ struct ContentView: View {
 
             if isValidExpression(expression) {
                 let result = evaluateExpression(expression)
-                display = result
-                expressionShown = currentInput
-                history.insert("\(currentInput) = \(result)", at: 0)
-                currentInput = result
-                justEvaluated = true
+                if result != "Error", expression != result {
+                    let formatted = formatNumber(result)
+                    display = formatted
+                    expressionShown = currentInput
+                    history.insert("\(currentInput) = \(formatted)", at: 0)
+                    currentInput = result
+                    justEvaluated = true
+                } else {
+                    display = formatNumber(result)
+                    currentInput = result
+                    justEvaluated = true
+                }
             }
+
         case "+", "-", "×", "÷":
             if justEvaluated {
-                currentInput = display + label
+                currentInput = display.replacingOccurrences(of: ",", with: "") + label
                 justEvaluated = false
             } else {
+                if let last = currentInput.last, "+-×÷".contains(last) {
+                    currentInput.removeLast()
+                }
                 currentInput += label
             }
             display = currentInput
+
         case "+/-":
             if currentInput.hasPrefix("-") {
                 currentInput.removeFirst()
@@ -222,13 +231,18 @@ struct ContentView: View {
                 currentInput = "-" + currentInput
             }
             display = currentInput
+
         case ".":
-            if let last = currentInput.split(whereSeparator: { "+-×÷*/".contains($0) }).last,
-               last.contains(".") {
+            if currentInput.isEmpty {
+                currentInput = "0."
+            } else if let last = currentInput.split(whereSeparator: { "+-×÷*/".contains($0) }).last,
+                      last.contains(".") {
                 return
+            } else {
+                currentInput += "."
             }
-            currentInput += "."
             display = currentInput
+
         default:
             if justEvaluated {
                 currentInput = label
@@ -240,13 +254,12 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Helpers
+
     func isValidExpression(_ expression: String) -> Bool {
         let trimmed = expression.trimmingCharacters(in: .whitespaces)
         let operators = "+-*/"
-        if trimmed.isEmpty || operators.contains(trimmed.first!) || operators.contains(trimmed.last!) {
-            return false
-        }
-        return true
+        return !(trimmed.isEmpty || operators.contains(trimmed.first!) || operators.contains(trimmed.last!))
     }
 
     func evaluateExpression(_ expression: String) -> String {
@@ -258,28 +271,34 @@ struct ContentView: View {
 
         do {
             let result = try Expression(expr).evaluate()
-            return String(format: "%g", result)
+            return String(result)
         } catch {
             return "Error"
         }
     }
 
+    func formatNumber(_ string: String) -> String {
+        guard let number = Double(string) else { return string }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 10
+        return formatter.string(from: NSNumber(value: number)) ?? string
+    }
+
     func backspace() {
         guard !currentInput.isEmpty else { return }
-
         currentInput.removeLast()
         display = currentInput.isEmpty ? "0" : currentInput
     }
 
     func buttonWidth(label: String) -> CGFloat {
-        if label == "0" {
-            return (UIScreen.main.bounds.width - 5 * 12) / 2
-        }
-        return (UIScreen.main.bounds.width - 5 * 12) / 4
+        label == "0"
+        ? (UIScreen.main.bounds.width - 5 * 12) / 2
+        : (UIScreen.main.bounds.width - 5 * 12) / 4
     }
 
     func buttonHeight() -> CGFloat {
-        return (UIScreen.main.bounds.width - 5 * 12) / 4
+        (UIScreen.main.bounds.width - 5 * 12) / 4
     }
 }
 
