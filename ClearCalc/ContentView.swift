@@ -1,12 +1,15 @@
+//
 //  ContentView.swift
 //  ClearCalc
 //
 //  Created by Amol Vyavaharkar on 07/04/25.
+//
 
 import SwiftUI
 import Expression
 
 struct ContentView: View {
+    @AppStorage("isDarkMode") private var isDarkMode = false
     @State private var display = "0"
     @State private var currentInput = ""
     @State private var expressionShown = ""
@@ -15,9 +18,12 @@ struct ContentView: View {
     @State private var justEvaluated = false
     @State private var history: [String] = []
     @State private var showHistorySheet = false
+    @State private var showCharLimitAlert = false
+
+    let characterLimit = 40
 
     let buttons: [[String]] = [
-        ["C", "+/-", "%", "÷"],
+        ["+/-", "%", "÷"],
         ["7", "8", "9", "×"],
         ["4", "5", "6", "-"],
         ["1", "2", "3", "+"],
@@ -33,51 +39,90 @@ struct ContentView: View {
                     VStack(spacing: 12) {
                         Spacer()
 
-                        HStack {
-                            Button(action: {
-                                showHistorySheet = true
-                            }) {
-                                Label("History", systemImage: "clock.arrow.circlepath")
-                                    .font(.subheadline)
-                                    .foregroundColor(.blue)
-                            }
-                            .padding(.leading, 12)
-                            .padding(.top, 6)
-                            Spacer()
-                        }
-
                         VStack(alignment: .trailing, spacing: 8) {
                             if !expressionShown.isEmpty {
                                 Text(expressionShown)
                                     .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(isDarkMode ? .yellow : .gray)
                                     .lineLimit(1)
-                                    .padding(.horizontal)
                                     .frame(maxWidth: .infinity, alignment: .trailing)
+                                    .padding(.horizontal)
                             }
 
-                            HStack(alignment: .bottom, spacing: 6) {
-                                Spacer()
-                                Text(display)
-                                    .font(.system(size: 56, weight: .bold))
-                                    .foregroundColor(.black)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.5)
-                                    .padding(.leading, 8)
-
-                                Button(action: {
-                                    backspace()
-                                }) {
-                                    Image(systemName: "delete.left")
-                                        .font(.system(size: 24, weight: .medium))
-                                        .foregroundColor(.red)
-                                        .padding(.trailing, 10)
-                                }
-                            }
-                            .padding(.horizontal, 8)
+                            Text(display)
+                                .font(.system(size: 56, weight: .bold))
+                                .foregroundColor(isDarkMode ? .yellow : .black)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                                .padding(.horizontal, 8)
                         }
 
-                        ForEach(buttons, id: \.self) { row in
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                showHistorySheet = true
+                            }) {
+                                Label("History", systemImage: "clock.arrow.circlepath")
+                                    .font(.headline)
+                                    .foregroundColor(.blue)
+                            }
+                            Spacer()
+                        }
+                        .padding(.bottom, 8)
+
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                if currentInput.isEmpty {
+                                    display = "0"
+                                    expressionShown = ""
+                                    if !history.isEmpty {
+                                        history.removeAll()
+                                    }
+                                } else {
+                                    backspace()
+                                }
+                            }) {
+                                Group {
+                                    if currentInput.isEmpty {
+                                        Text("C")
+                                            .font(.system(size: 28, weight: .semibold))
+                                    } else {
+                                        Image(systemName: "delete.left.fill")
+                                            .font(.system(size: 28))
+                                    }
+                                }
+                                .foregroundColor(.white)
+                                .frame(width: buttonWidth(label: "C"), height: buttonHeight())
+                                .background(currentInput.isEmpty ? Color.orange : Color.red)
+                                .cornerRadius(buttonWidth(label: "C") / 2)
+                            }
+                            .simultaneousGesture(
+                                LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+                                    if currentInput.isEmpty {
+                                        history.removeAll()
+                                    }
+                                    currentInput = ""
+                                    display = "0"
+                                    expressionShown = ""
+                                }
+                            )
+
+                            ForEach(buttons[0], id: \.self) { label in
+                                Button(action: {
+                                    self.handleTap(label)
+                                }) {
+                                    Text(label)
+                                        .font(.system(size: 32))
+                                        .frame(width: buttonWidth(label: label), height: buttonHeight())
+                                        .foregroundColor(.white)
+                                        .background(Color.blue)
+                                        .cornerRadius(buttonWidth(label: label) / 2)
+                                }
+                            }
+                        }
+
+                        ForEach(buttons.dropFirst(), id: \.self) { row in
                             HStack(spacing: 12) {
                                 ForEach(row, id: \.self) { label in
                                     Button(action: {
@@ -85,10 +130,10 @@ struct ContentView: View {
                                     }) {
                                         Text(label)
                                             .font(.system(size: 32))
-                                            .frame(width: self.buttonWidth(label: label), height: self.buttonHeight())
+                                            .frame(width: buttonWidth(label: label), height: buttonHeight())
                                             .foregroundColor(.white)
                                             .background(Color.blue)
-                                            .cornerRadius(self.buttonWidth(label: label) / 2)
+                                            .cornerRadius(buttonWidth(label: label) / 2)
                                     }
                                 }
                             }
@@ -139,6 +184,9 @@ struct ContentView: View {
             }
             .animation(.easeInOut, value: dragOffset)
         }
+        .alert(isPresented: $showCharLimitAlert) {
+            Alert(title: Text("Limit Reached"), message: Text("Character limit exceeded."), dismissButton: .default(Text("OK")))
+        }
         .sheet(isPresented: $showHistorySheet) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -179,13 +227,12 @@ struct ContentView: View {
 
     // MARK: - Logic
     func handleTap(_ label: String) {
-        switch label {
-        case "C":
-            display = "0"
-            currentInput = ""
-            expressionShown = ""
-            history.removeAll()
+        if currentInput.count >= characterLimit && label != "=" {
+            showCharLimitAlert = true
+            return
+        }
 
+        switch label {
         case "=":
             let expression = currentInput
                 .replacingOccurrences(of: "×", with: "*")
@@ -198,16 +245,12 @@ struct ContentView: View {
                 if result != "Error", let _ = Double(result) {
                     let formatted = formatNumber(result)
                     display = formatted
-
-                    // ✅ Only store to history if expression contains at least one operator
-                    if expression.contains("+") || expression.contains("-") ||
-                       expression.contains("*") || expression.contains("/") {
+                    if expression.rangeOfCharacter(from: CharacterSet(charactersIn: "+-*/")) != nil {
                         expressionShown = currentInput
                         history.insert("\(currentInput) = \(formatted)", at: 0)
                     } else {
                         expressionShown = ""
                     }
-
                     currentInput = result
                     justEvaluated = true
                 }
@@ -225,21 +268,17 @@ struct ContentView: View {
                 currentInput.removeLast()
             }
             currentInput += label
-            display = currentInput
+            display = formatNumber(currentInput.replacingOccurrences(of: ",", with: ""))
 
         case "+/-":
-            if currentInput.hasPrefix("-") {
-                currentInput.removeFirst()
-            } else {
-                currentInput = "-" + currentInput
-            }
+            if currentInput.isEmpty { return }
+            currentInput = "(-\(currentInput))"
             display = currentInput
 
         case ".":
             if currentInput.isEmpty {
                 currentInput = "0."
-            } else if let last = currentInput.split(whereSeparator: { "+-×÷*/".contains($0) }).last,
-                      last.contains(".") {
+            } else if let last = currentInput.split(whereSeparator: { "+-×÷*/".contains($0) }).last, last.contains(".") {
                 return
             } else {
                 currentInput += "."
@@ -253,12 +292,11 @@ struct ContentView: View {
             } else {
                 currentInput += label
             }
-            display = currentInput
+            display = formatNumber(currentInput.replacingOccurrences(of: ",", with: ""))
         }
     }
 
     // MARK: - Helpers
-
     func isValidExpression(_ expression: String) -> Bool {
         let trimmed = expression.trimmingCharacters(in: .whitespaces)
         let operators = "+-*/"
@@ -267,11 +305,6 @@ struct ContentView: View {
 
     func evaluateExpression(_ expression: String) -> String {
         let expr = expression
-            .replacingOccurrences(of: "×", with: "*")
-            .replacingOccurrences(of: "÷", with: "/")
-            .replacingOccurrences(of: "%", with: "*0.01")
-            .replacingOccurrences(of: "^", with: "**")
-
         do {
             let result = try Expression(expr).evaluate()
             return String(result)
@@ -291,7 +324,7 @@ struct ContentView: View {
     func backspace() {
         guard !currentInput.isEmpty else { return }
         currentInput.removeLast()
-        display = currentInput.isEmpty ? "0" : currentInput
+        display = currentInput.isEmpty ? "0" : formatNumber(currentInput.replacingOccurrences(of: ",", with: ""))
     }
 
     func buttonWidth(label: String) -> CGFloat {
