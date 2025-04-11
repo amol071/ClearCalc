@@ -1,9 +1,7 @@
-//
 //  ContentView.swift
 //  ClearCalc
 //
 //  Created by Amol Vyavaharkar on 07/04/25.
-//
 
 import SwiftUI
 import Expression
@@ -43,39 +41,41 @@ struct ContentView: View {
                                     .font(.subheadline)
                                     .foregroundColor(.blue)
                             }
-                            .padding(.leading)
+                            .padding(.leading, 12)
+                            .padding(.top, 6)
                             Spacer()
                         }
 
-                        VStack(alignment: .trailing, spacing: 4) {
-                            HStack {
-                                Spacer()
+                        VStack(alignment: .trailing, spacing: 8) {
+                            if !expressionShown.isEmpty {
                                 Text(expressionShown)
-                                    .font(.system(size: 24))
+                                    .font(.system(size: 20, weight: .medium))
                                     .foregroundColor(.gray)
-                                    .padding(.trailing)
+                                    .lineLimit(1)
+                                    .padding(.horizontal)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
                             }
 
-                            HStack {
+                            HStack(alignment: .bottom, spacing: 6) {
                                 Spacer()
                                 Text(display)
-                                    .font(.system(size: 64))
+                                    .font(.system(size: 56, weight: .bold))
                                     .foregroundColor(.black)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.5)
-                                    .padding(.trailing, 8)
+                                    .padding(.leading, 8)
 
                                 Button(action: {
                                     backspace()
                                 }) {
                                     Image(systemName: "delete.left")
-                                        .font(.system(size: 28))
+                                        .font(.system(size: 24, weight: .medium))
                                         .foregroundColor(.red)
-                                        .padding(.trailing)
+                                        .padding(.trailing, 10)
                                 }
                             }
+                            .padding(.horizontal, 8)
                         }
-                        .padding(.horizontal)
 
                         ForEach(buttons, id: \.self) { row in
                             HStack(spacing: 12) {
@@ -106,39 +106,36 @@ struct ContentView: View {
                 }
             }
 
-            // Side menu
-            ZStack {
-                if showMenu {
-                    Color.black.opacity(0.3).ignoresSafeArea().onTapGesture {
-                        withAnimation {
-                            showMenu = false
-                            dragOffset = 0
-                        }
+            if showMenu {
+                Color.black.opacity(0.3).ignoresSafeArea().onTapGesture {
+                    withAnimation {
+                        showMenu = false
+                        dragOffset = 0
                     }
                 }
+            }
 
-                HStack {
-                    SideMenuView(showMenu: $showMenu)
-                        .frame(width: 250)
-                        .offset(x: showMenu ? dragOffset : -250 + dragOffset)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    if value.translation.width >= 0 {
-                                        dragOffset = value.translation.width
-                                    }
+            HStack {
+                SideMenuView(showMenu: $showMenu)
+                    .frame(width: 250)
+                    .offset(x: showMenu ? dragOffset : -250 + dragOffset)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                if value.translation.width >= 0 {
+                                    dragOffset = value.translation.width
                                 }
-                                .onEnded { value in
-                                    withAnimation {
-                                        if value.translation.width < -100 {
-                                            showMenu = false
-                                        }
-                                        dragOffset = 0
+                            }
+                            .onEnded { value in
+                                withAnimation {
+                                    if value.translation.width < -100 {
+                                        showMenu = false
                                     }
+                                    dragOffset = 0
                                 }
-                        )
-                    Spacer()
-                }
+                            }
+                    )
+                Spacer()
             }
             .animation(.easeInOut, value: dragOffset)
         }
@@ -198,15 +195,19 @@ struct ContentView: View {
 
             if isValidExpression(expression) {
                 let result = evaluateExpression(expression)
-                if result != "Error", expression != result {
+                if result != "Error", let _ = Double(result) {
                     let formatted = formatNumber(result)
                     display = formatted
-                    expressionShown = currentInput
-                    history.insert("\(currentInput) = \(formatted)", at: 0)
-                    currentInput = result
-                    justEvaluated = true
-                } else {
-                    display = formatNumber(result)
+
+                    // ✅ Only store to history if expression contains at least one operator
+                    if expression.contains("+") || expression.contains("-") ||
+                       expression.contains("*") || expression.contains("/") {
+                        expressionShown = currentInput
+                        history.insert("\(currentInput) = \(formatted)", at: 0)
+                    } else {
+                        expressionShown = ""
+                    }
+
                     currentInput = result
                     justEvaluated = true
                 }
@@ -214,14 +215,16 @@ struct ContentView: View {
 
         case "+", "-", "×", "÷":
             if justEvaluated {
-                currentInput = display.replacingOccurrences(of: ",", with: "") + label
+                currentInput = display.replacingOccurrences(of: ",", with: "")
                 justEvaluated = false
-            } else {
-                if let last = currentInput.last, "+-×÷".contains(last) {
-                    currentInput.removeLast()
-                }
-                currentInput += label
             }
+            if currentInput.hasSuffix(".") {
+                currentInput.removeLast()
+            }
+            if let last = currentInput.last, "+-×÷".contains(last) {
+                currentInput.removeLast()
+            }
+            currentInput += label
             display = currentInput
 
         case "+/-":
