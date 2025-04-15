@@ -5,13 +5,18 @@
 //  Created by Amol Vyavaharkar on 07/04/25.
 //
 
+//  ContentView.swift
+//  ClearCalc
+//
+//  Created by Amol Vyavaharkar on 07/04/25.
+
 import SwiftUI
 import Expression
 
 struct ContentView: View {
     @AppStorage("isDarkMode") private var isDarkMode = false
     @State private var display = "0"
-    @State private var currentInput = ""
+    @State private var rawInput = ""
     @State private var expressionShown = ""
     @State private var showMenu = false
     @State private var dragOffset: CGFloat = 0.0
@@ -29,6 +34,10 @@ struct ContentView: View {
         ["1", "2", "3", "+"],
         ["0", ".", "="]
     ]
+
+    var currentInput: String {
+        rawInput.formatExpression()
+    }
 
     var body: some View {
         ZStack {
@@ -73,38 +82,32 @@ struct ContentView: View {
 
                         HStack(spacing: 12) {
                             Button(action: {
-                                if currentInput.isEmpty {
+                                if rawInput.isEmpty {
                                     display = "0"
                                     expressionShown = ""
-                                    if !history.isEmpty {
-                                        history.removeAll()
-                                    }
+                                    history.removeAll()
                                 } else {
                                     backspace()
                                 }
                             }) {
                                 Group {
-                                    if currentInput.isEmpty {
-                                        Text("C")
-                                            .font(.system(size: 28, weight: .semibold))
+                                    if rawInput.isEmpty {
+                                        Text("C").font(.system(size: 28, weight: .semibold))
                                     } else {
-                                        Image(systemName: "delete.left.fill")
-                                            .font(.system(size: 28))
+                                        Image(systemName: "delete.left.fill").font(.system(size: 28))
                                     }
                                 }
                                 .foregroundColor(.white)
                                 .frame(width: buttonWidth(label: "C"), height: buttonHeight())
-                                .background(currentInput.isEmpty ? Color.orange : Color.red)
+                                .background(rawInput.isEmpty ? Color.orange : Color.red)
                                 .cornerRadius(buttonWidth(label: "C") / 2)
                             }
                             .simultaneousGesture(
                                 LongPressGesture(minimumDuration: 0.6).onEnded { _ in
-                                    if currentInput.isEmpty {
-                                        history.removeAll()
-                                    }
-                                    currentInput = ""
+                                    rawInput = ""
                                     display = "0"
                                     expressionShown = ""
+                                    history.removeAll()
                                 }
                             )
 
@@ -227,18 +230,18 @@ struct ContentView: View {
 
     // MARK: - Logic
     func handleTap(_ label: String) {
-        if currentInput.count >= characterLimit && label != "=" {
+        if rawInput.count >= characterLimit && label != "=" {
             showCharLimitAlert = true
             return
         }
 
         switch label {
         case "=":
-            let expression = currentInput
+            let expression = rawInput
                 .replacingOccurrences(of: "×", with: "*")
                 .replacingOccurrences(of: "÷", with: "/")
                 .replacingOccurrences(of: "%", with: "*0.01")
-                .replacingOccurrences(of: "^", with: "**")
+                .replacingOccurrences(of: ",", with: "")
 
             if isValidExpression(expression) {
                 let result = evaluateExpression(expression)
@@ -251,52 +254,49 @@ struct ContentView: View {
                     } else {
                         expressionShown = ""
                     }
-                    currentInput = result
+                    rawInput = result
                     justEvaluated = true
                 }
             }
 
         case "+", "-", "×", "÷":
             if justEvaluated {
-                currentInput = display.replacingOccurrences(of: ",", with: "")
+                rawInput = display.replacingOccurrences(of: ",", with: "")
                 justEvaluated = false
             }
-            if currentInput.hasSuffix(".") {
-                currentInput.removeLast()
+            if rawInput.hasSuffix(".") { rawInput.removeLast() }
+            if let last = rawInput.last, "+-×÷".contains(last) {
+                rawInput.removeLast()
             }
-            if let last = currentInput.last, "+-×÷".contains(last) {
-                currentInput.removeLast()
-            }
-            currentInput += label
-            display = formatNumber(currentInput.replacingOccurrences(of: ",", with: ""))
+            rawInput += label
+            display = currentInput
 
         case "+/-":
-            if currentInput.isEmpty { return }
-            currentInput = "(-\(currentInput))"
+            if rawInput.isEmpty { return }
+            rawInput = "(-\(rawInput))"
             display = currentInput
 
         case ".":
-            if currentInput.isEmpty {
-                currentInput = "0."
-            } else if let last = currentInput.split(whereSeparator: { "+-×÷*/".contains($0) }).last, last.contains(".") {
+            if rawInput.isEmpty {
+                rawInput = "0."
+            } else if let last = rawInput.split(whereSeparator: { "+-×÷*/".contains($0) }).last, last.contains(".") {
                 return
             } else {
-                currentInput += "."
+                rawInput += "."
             }
             display = currentInput
 
         default:
             if justEvaluated {
-                currentInput = label
+                rawInput = label
                 justEvaluated = false
             } else {
-                currentInput += label
+                rawInput += label
             }
-            display = formatNumber(currentInput.replacingOccurrences(of: ",", with: ""))
+            display = currentInput
         }
     }
 
-    // MARK: - Helpers
     func isValidExpression(_ expression: String) -> Bool {
         let trimmed = expression.trimmingCharacters(in: .whitespaces)
         let operators = "+-*/"
@@ -304,9 +304,8 @@ struct ContentView: View {
     }
 
     func evaluateExpression(_ expression: String) -> String {
-        let expr = expression
         do {
-            let result = try Expression(expr).evaluate()
+            let result = try Expression(expression).evaluate()
             return String(result)
         } catch {
             return "Error"
@@ -322,9 +321,9 @@ struct ContentView: View {
     }
 
     func backspace() {
-        guard !currentInput.isEmpty else { return }
-        currentInput.removeLast()
-        display = currentInput.isEmpty ? "0" : formatNumber(currentInput.replacingOccurrences(of: ",", with: ""))
+        guard !rawInput.isEmpty else { return }
+        rawInput.removeLast()
+        display = rawInput.isEmpty ? "0" : currentInput
     }
 
     func buttonWidth(label: String) -> CGFloat {
@@ -337,6 +336,49 @@ struct ContentView: View {
         (UIScreen.main.bounds.width - 5 * 12) / 4
     }
 }
+
+extension String {
+    func formatExpression() -> String {
+        var formatted = ""
+        var currentNumber = ""
+        var trailingDot = false
+
+        for char in self {
+            if char.isWholeNumber || char == "." {
+                if char == "." && currentNumber.contains(".") == false {
+                    trailingDot = true
+                }
+                currentNumber.append(char)
+            } else {
+                if !currentNumber.isEmpty {
+                    formatted += formatNumber(currentNumber, trailingDot: trailingDot)
+                    currentNumber = ""
+                    trailingDot = false
+                }
+                formatted.append(char)
+            }
+        }
+
+        if !currentNumber.isEmpty {
+            formatted += formatNumber(currentNumber, trailingDot: trailingDot)
+        }
+
+        return formatted
+    }
+
+    private func formatNumber(_ part: String, trailingDot: Bool) -> String {
+        guard let number = Double(part) else { return part }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 10
+        var result = formatter.string(from: NSNumber(value: number)) ?? part
+        if trailingDot && !result.contains(".") {
+            result += "."
+        }
+        return result
+    }
+}
+
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {

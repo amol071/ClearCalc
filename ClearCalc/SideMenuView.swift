@@ -3,6 +3,7 @@ import SwiftUI
 struct SideMenuView: View {
     @Binding var showMenu: Bool
     @State private var showSettings = false
+    @State private var showAbout = false
     @State private var showComingSoonAlert = false
     @State private var comingSoonFeatureName = ""
 
@@ -38,7 +39,7 @@ struct SideMenuView: View {
             }
 
             Button(action: {
-                // About page logic (future)
+                showAbout = true
                 showMenu = false
             }) {
                 Text("About")
@@ -62,21 +63,18 @@ struct SideMenuView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
+        .sheet(isPresented: $showAbout) {
+            AboutView()
+        }
         .alert(isPresented: $showComingSoonAlert) {
             Alert(
                 title: Text("Coming Soon"),
                 message: Text("\(comingSoonFeatureName) is under development."),
                 dismissButton: .default(Text("OK"), action: {
-                    showMenu = false // Dismiss menu *after* alert
+                    showMenu = false
                 })
             )
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
-    }
-}
-
-struct SideMenuView_Previews: PreviewProvider {
-    static var previews: some View {
-        SideMenuView(showMenu: .constant(true))
     }
 }
